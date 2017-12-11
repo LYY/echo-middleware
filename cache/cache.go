@@ -91,7 +91,24 @@ func urlEscape(prefix string, u string) string {
 	return buffer.String()
 }
 
-func jsonPostKey(prefix string, uri string, vkeys []string) string {
+func jsonPostKey(prefix string, request *http.Request, keys []string) string {
+	uri := request.RequestURI
+
+	var vkeys []string
+	if len(keys) > 0 {
+		buf := middleware.ByteBufferPool.Get()
+		defer middleware.ByteBufferPool.Put(buf)
+		tee := io.TeeReader(request.Body, buf)
+		bytes, _ := ioutil.ReadAll(tee)
+		request.Body.Close()
+
+		for _, k := range keys {
+			vkeys = append(vkeys, gjson.GetBytes(bytes, k).String())
+		}
+
+		request.Body = ioutil.NopCloser(buf)
+	}
+
 	key := strings.Join(vkeys, ",")
 	if len(key) > 200 {
 		h := sha1.New()
@@ -181,26 +198,9 @@ func JSONPostPageCache(config Config, keys ...string) echo.MiddlewareFunc {
 			var cache responseCache
 			request := c.Request()
 
-			uri := request.RequestURI
-
-			var vkeys []string
-			if len(keys) > 0 {
-				buf := middleware.ByteBufferPool.Get()
-				defer middleware.ByteBufferPool.Put(buf)
-				tee := io.TeeReader(request.Body, buf)
-				bytes, _ := ioutil.ReadAll(tee)
-				request.Body.Close()
-
-				for _, k := range keys {
-					vkeys = append(vkeys, gjson.GetBytes(bytes, k).String())
-				}
-
-				request.Body = ioutil.NopCloser(buf)
-			}
-
-			key := jsonPostKey(PageCachePrefix, uri, vkeys)
+			key := jsonPostKey(PageCachePrefix, request, keys)
 			if err := store.Get(key, &cache); err != nil {
-				logger.Debugf("Cache A %s %s %s", err, key, uri)
+				logger.Debugf("Cache A %s %s %s", err, key, request.RequestURI)
 				// replace writer
 				writer := newCachedWriter(store, config.Expire, c.Response().Writer, key, logger)
 				c.Response().Writer = writer
