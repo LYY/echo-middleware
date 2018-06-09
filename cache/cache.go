@@ -96,8 +96,7 @@ func jsonPostKey(prefix string, request *http.Request, keys []string) string {
 
 	var vkeys []string
 	if len(keys) > 0 {
-		buf := middleware.ByteBufferPool.Get()
-		defer middleware.ByteBufferPool.Put(buf)
+		buf := new(bytes.Buffer)
 		tee := io.TeeReader(request.Body, buf)
 		bytes, _ := ioutil.ReadAll(tee)
 		request.Body.Close()
