@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"errors"
 	"io"
